@@ -6,7 +6,7 @@ A minimal automatic differentiation (autodiff) engine built in pure Python. Impl
 
 This is a from-scratch implementation of the core algorithm that powers PyTorch, TensorFlow, and JAX. It automatically computes gradients using the chain rule — no manual derivative calculations needed in user code.
 
-**90 lines of code. Zero dependencies (except `math`). Full backpropagation.**
+Lightweight, zero external deps (only `math`, `random`). Full backpropagation with operator overloading and tiny NN building blocks.
 
 ## Features
 
@@ -14,7 +14,9 @@ This is a from-scratch implementation of the core algorithm that powers PyTorch,
 - ✅ Reverse-mode automatic differentiation
 - ✅ Gradient accumulation for multi-path dependencies
 - ✅ Topological sort via DFS
-- ✅ Operations: `+`, `*`, `**`, `exp`, `tanh`
+- ✅ Operations: `+`, `-`, unary `-`, `*`, `/`, `**`, `exp`, `tanh`, `relu`, `sigmoid`
+- ✅ Full operator overloading (including reverse ops like `__radd__`, `__rsub__`, `__rtruediv__`, `__rpow__`)
+- ✅ Tiny NN primitives: `Neuron`, `Layer`, `MLP`
 
 ## Installation
 
@@ -27,24 +29,24 @@ python micrograd.py
 ## Usage
 
 ```python
-from micrograd import Value
+from micrograd import Value, MLP
 
-# Define inputs
+# Scalar example
 a = Value(2.0)
 b = Value(3.0)
 c = Value(4.0)
-
-# Build computation graph
 d = a + b           # 5.0
 L = d * c           # 20.0
-
-# Compute all gradients
 L.backward()
+print(a.grad, b.grad, c.grad)  # 4.0 4.0 5.0
 
-# Access gradients
-print(f"∂L/∂a = {a.grad}")  # 4.0
-print(f"∂L/∂b = {b.grad}")  # 4.0
-print(f"∂L/∂c = {c.grad}")  # 5.0
+# Tiny MLP example (1 → 16 → 16 → 1)
+mlp = MLP(1, [16, 16, 1])
+x = [Value(0.2)]
+y = mlp(x)          # single Value output
+# In a real task, define a loss vs target and call backward:
+loss = y
+loss.backward()
 ```
 
 ## How It Works
@@ -93,11 +95,15 @@ y.grad += z.grad * x  # ∂L/∂y = ∂L/∂z · ∂z/∂y
 
 | Operation | Math | Backward Rule |
 |-----------|------|---------------|
-| Addition | `z = x + y` | `x̄ = z̄`, `ȳ = z̄` |
+| Addition / Subtraction | `z = x ± y` | `x̄ = z̄`, `ȳ = ± z̄` |
+| Negation | `z = -x` | `x̄ = -z̄` |
 | Multiplication | `z = x · y` | `x̄ = z̄ · y`, `ȳ = z̄ · x` |
+| Division | `z = x / y` | `x̄ = z̄ / y`, `ȳ = -z̄ · x / y²` |
 | Power | `z = x^n` | `x̄ = z̄ · n · x^(n-1)` |
 | Exponential | `z = e^x` | `x̄ = z̄ · z` |
 | Tanh | `z = tanh(x)` | `x̄ = z̄ · (1 - z²)` |
+| ReLU | `z = max(0, x)` | `x̄ = z̄ · 1_{x>0}` |
+| Sigmoid | `z = 1/(1+e^{-x})` | `x̄ = z̄ · z · (1 - z)` |
 
 ## Example: Gradient Verification
 
@@ -150,11 +156,9 @@ No copying. Pure understanding.
 
 ## What's Next?
 
-Extend this engine with:
-- `Neuron`, `Layer`, `MLP` classes
-- More operations: ReLU, subtraction, division
-- Graph visualization (Graphviz)
-- Tensor support (move from scalars to arrays)
+- Train an MLP on `sin(x)` over [-3, 3] and plot predictions.
+- Add graph visualization (Karpathy’s `draw_dot`) and PNG export.
+- Extend to tensor support (move from scalars to arrays).
 
 ## License
 

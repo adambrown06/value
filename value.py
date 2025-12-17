@@ -1,6 +1,6 @@
 import math
 import random
-
+import matplotlib.pyplot as plt
 
 class Value:
     def __init__(self, data, _children=(), _op=''):
@@ -144,20 +144,24 @@ class Neuron:
         self.w = [Value(random.gauss(0, 0.1)) for _ in range(nin)]
         self.b = Value(0.0)
     
-    def __call__(self, x: list[Value]) -> Value:
+    def __call__(self, x: list[Value], activation = True) -> Value:
         # activation = tanh(sum(w_i * x_i) + b)
-        act = sum((wi * xi) for wi, xi in zip(self.w, x)) + self.b
-        return act.tanh()
+        out = sum((wi * xi) for wi, xi in zip(self.w, x)) + self.b
+        if activation:
+            return out.tanh()
+        else:
+            return out
 
     def parameters(self) -> list[Value]:
         return self.w + [self.b]
 
 class Layer:
-    def __init__(self, nin, nout):
+    def __init__(self, nin, nout, activation = True):
         self.neurons = [Neuron(nin) for _ in range(nout)]
+        self.activation = activation
        
     def __call__(self, x: list[Value]):
-        return [n(x) for n in self.neurons]
+        return [n(x, self.activation) for n in self.neurons]
 
     def parameters(self):
         return [p for n in self.neurons for p in n.parameters()]
@@ -167,7 +171,8 @@ class MLP:
         self.layers = []
         sizes = [nin] + nouts
         for i in range(len(sizes) - 1):
-            self.layers.append(Layer(sizes[i], sizes[i + 1]))
+            use_activation = (i<len(sizes)-2)
+            self.layers.append(Layer(sizes[i], sizes[i + 1], activation = use_activation))
     
     def __call__(self, x: list[Value]):
         for layer in self.layers:
@@ -176,6 +181,62 @@ class MLP:
 
     def parameters(self):
         return [p for layer in self.layers for p in layer.parameters()]
+
+def generate_data():
+    xs = [x / 100.0 for x in range(-300, 301, 5)]  # -3.0 to 3.0 step ~0.05
+    ys = [math.sin(x) for x in xs]
+    return xs, ys
+
+def train(mlp, xs, ys, lr_start, lr_end, epochs):
+    for i in range(epochs):
+        # Forward pass
+        y_pred = [mlp([Value(x)]) for x in xs]
+        loss = sum((yp - ygt)**2 for yp, ygt in zip(y_pred, ys)) / len(ys)
+        
+        # Zero gradients
+        for p in mlp.parameters():
+            p.grad = 0.0
+        
+        # Backward pass
+        loss.backward()
+        
+        # Learning rate decay (linear)
+        lr = lr_start if epochs == 1 else lr_start - (lr_start - lr_end) * (i / (epochs - 1))
+        
+        # Update parameters
+        for p in mlp.parameters():
+            p.data -= lr * p.grad
+        
+        # Logging
+        if i % 50 == 0 or i == epochs - 1:
+            print(f"epoch {i:03d} loss {loss.data:.6f} lr {lr:.5f}")
+
+def plot_results(mlp, xs_train, ys_train):
+    # Generate fine grid for smooth curve
+    xs_fine = [x / 100.0 for x in range(-300, 301)]  # step 0.01
+    ys_true = [math.sin(x) for x in xs_fine]
+    ys_pred = [mlp([Value(x)]).data for x in xs_fine]
+    
+    # Plot
+    plt.figure(figsize=(10, 6))
+    plt.scatter(xs_train, ys_train, color='blue', s=10, label='ground truth', alpha=0.6)
+    plt.plot(xs_fine, ys_pred, color='red', linewidth=2, label='model prediction')
+    plt.title('Perfect sin(x) fit with from-scratch autograd')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('sine_fit.png', dpi=150)
+    plt.close()
+    print("Plot saved as sine_fit.png")
+
+        
+
+
+
+
+
     
 
 if __name__ == "__main__":
@@ -211,5 +272,15 @@ if __name__ == "__main__":
     loss = y_pred  # placeholder: in real training, compute loss vs target
     loss.backward()
     print(f"MLP output (used as loss placeholder): {loss.data}")
+
+    # Sine fit training
+    print("\n" + "="*50)
+    print("Training MLP to fit sin(x)")
+    print("="*50)
+    
+    xs, ys = generate_data()
+    mlp = MLP(1, [16, 16, 1])
+    train(mlp, xs, ys, lr_start=0.1,lr_end=.05, epochs=1000)
+    plot_results(mlp, xs, ys)
 
 

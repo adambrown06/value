@@ -23,7 +23,7 @@ Lightweight, zero external deps (only `math`, `random`). Full backpropagation wi
 No installation needed. Just:
 
 ```bash
-python micrograd.py
+python value.py
 ```
 
 ## Usage

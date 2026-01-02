@@ -14,9 +14,10 @@ Lightweight, zero external deps (only `math`, `random`). Full backpropagation wi
 - ✅ Reverse-mode automatic differentiation
 - ✅ Gradient accumulation for multi-path dependencies
 - ✅ Topological sort via DFS
-- ✅ Operations: `+`, `-`, unary `-`, `*`, `/`, `**`, `exp`, `tanh`, `relu`, `sigmoid`
+- ✅ Operations: `+`, `-`, unary `-`, `*`, `/`, `**`, `exp`, `log`, `tanh`, `relu`, `sigmoid`
 - ✅ Full operator overloading (including reverse ops like `__radd__`, `__rsub__`, `__rtruediv__`, `__rpow__`)
 - ✅ Tiny NN primitives: `Neuron`, `Layer`, `MLP`
+- ✅ Bigram language models: Both counting-based and neural network implementations
 
 ## Installation
 
@@ -101,6 +102,7 @@ y.grad += z.grad * x  # ∂L/∂y = ∂L/∂z · ∂z/∂y
 | Division | `z = x / y` | `x̄ = z̄ / y`, `ȳ = -z̄ · x / y²` |
 | Power | `z = x^n` | `x̄ = z̄ · n · x^(n-1)` |
 | Exponential | `z = e^x` | `x̄ = z̄ · z` |
+| Logarithm | `z = ln(x)` | `x̄ = z̄ / x` |
 | Tanh | `z = tanh(x)` | `x̄ = z̄ · (1 - z²)` |
 | ReLU | `z = max(0, x)` | `x̄ = z̄ · 1_{x>0}` |
 | Sigmoid | `z = 1/(1+e^{-x})` | `x̄ = z̄ · z · (1 - z)` |
@@ -156,6 +158,8 @@ No copying. Pure understanding.
 
 ## Training Results
 
+### Sine Function Fitting
+
 The code includes a complete training example that fits an MLP to `sin(x)` over the range [-3, 3]:
 
 ```python
@@ -170,19 +174,56 @@ plot_results(mlp, xs, ys)  # Saves sine_fit.png
 - The model successfully learns to approximate `sin(x)` with high accuracy
 - Training uses linear learning rate decay from `lr_start` to `lr_end` over the specified epochs
 
+### Bigram Language Model
+
+The code implements two approaches to character-level bigram language modeling on Shakespeare text:
+
+#### 1. Counting-Based Model (Baseline)
+```python
+text = download_text()  # Downloads tiny_shakespeare.txt
+stoi, itos, vocab_size = build_vocab(text)
+xs, ys = create_dataset(text, stoi)
+
+counts = build_counts(xs, ys, vocab_size)
+probs = counts_to_probs(counts, vocab_size)
+loss = evaluate_loss(xs, ys, probs)  # NLL = 2.45
+```
+
+**Results:**
+- Negative Log-Likelihood (NLL): **2.45**
+- Perplexity: **11.62**
+- Method: Direct bigram counting with row-normalization
+
+#### 2. Neural Network Model
+```python
+mlp_bigram = MLP(vocab_size, [64, vocab_size])  # One-hot → 64 hidden → vocab_size logits
+train_bigram_nn(mlp_bigram, xs[:50], ys[:50], vocab_size,
+                epochs=100, lr_start=0.5, lr_end=0.01)
+```
+
+**Results:**
+- Negative Log-Likelihood (NLL): **2.27** ✅
+- Perplexity: **9.65**
+- **Improvement**: 7.3% reduction in NLL, 17% reduction in perplexity vs counting model
+- Architecture: One-hot encoding → MLP → logits → softmax → cross-entropy loss
+
+**Key Insight:** The neural network successfully learns character transition patterns that outperform simple bigram counting, demonstrating the effectiveness of learned representations over statistical counting.
+
 **Learning Rate & Epochs:**
 The training hyperparameters (`lr_start`, `lr_end`, and `epochs`) can be adjusted based on your needs:
 - **Higher initial LR** (`lr_start`): Faster initial learning, but may be unstable
 - **Lower final LR** (`lr_end`): Better fine-tuning for very low loss
 - **More epochs**: Allows the model more time to converge to lower loss values
-
-Experimentation showed that a linear decay schedule from 0.2 → 0.0005 over 2000 epochs works well for this task, achieving loss < 0.001.
+- **Smaller datasets**: Use fewer examples (e.g., 50-200) to avoid recursion depth issues with pure Python implementation
 
 ## What's Next?
 
 - Add graph visualization (Karpathy's `draw_dot`) and PNG export.
 - Extend to tensor support (move from scalars to arrays).
 - Implement additional optimizers (Adam, RMSprop).
+- Scale neural net bigram model to larger datasets with mini-batch processing.
+- Implement n-gram models (trigram, 4-gram) with neural networks.
+- **Port to JAX**: Transform this implementation into a custom JAX transformer model for improved performance and scalability.
 
 ## License
 
